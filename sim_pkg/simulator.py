@@ -1,17 +1,6 @@
 #!/usr/bin/env python3
-"""
-Main Server for Swarm Simulation 
+""" Main Server for Swarm Simulation """
 
-__author__ = 'Devesh Bhura <devbhura@gmail.com>'
-__copyright__ = 'Copyright 2022, Northwestern University'
-__credits__ = ['Marko Vejnovic', 'Lin Liu']
-__license__ = 'Proprietary'
-__version__ = '0.5.0'
-__maintainer__ = 'Devesh Bhura'
-__email__ = 'devbhura@gmail.com'
-__status__ = 'Research'
-
-"""
 import random
 import socket
 import sys
@@ -20,78 +9,22 @@ import select
 import time
 import re
 import numpy as np
-import csv
 from itertools import chain
-import math
 import signal
-import pandas as pd
 import functiontrace
 import logging
-# import pygame
-# file = open('time.csv','w')
-# writer = csv.writer(file)
-socket_port_pandas = pd.read_csv("port.csv", header=None)
-socket_port_numpy = socket_port_pandas.to_numpy()
-socket_port_number = int(socket_port_numpy[0][0])
-print(socket_port_number)
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # SOCK_STREAM is for TCP 
-server_socket.bind((socket.gethostname(),socket_port_number)) # Binds to port 1245
+
+from sim_pkg.config import Configuration
+
+
+config = Configuration.from_path('config.json')
+
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.bind((socket.gethostname(), config.server_port))
 server_socket.listen(1)
 open_client_sockets = [] # current clients handler
 messages_to_send = [] # future message send handler
 elapsedDIffList = []
-
-with open('config.json', 'r') as myfile:
-    data=myfile.read()
-config_var = json.loads(data)
-
-# Sets the communication range
-RADIUS_OF_VISIBILITY = config_var["COMM_RANGE"]
-
-# Sets the packet success rate in decimal. 1.0 is 100% 0.7 is 70%
-PACKET_SUCCESS_PERC = config_var["PACKET_SUCCESS_PERC"]
-
-# Sets the number of robots to be launched in the scene
-NUM_OF_ROBOTS = config_var["NUMBER_OF_ROBOTS"]
-
-# The size of the msg buffer for each robot
-NUM_OF_MSGS = config_var["NUM_OF_MSGS"]
-
-# Length of the Arena
-ARENA_LENGTH = config_var["LENGTH"]
-
-# Width of the Arena
-ARENA_WIDTH = config_var["WIDTH"]
-
-# Radius of the robot body
-RADIUS_OF_ROBOT = 0.105/2
-
-# Variable to decide if the time initialization in the robots should be synced or not. 
-# 0 means it is synced, 1 means it is initialized at different values
-TIME_ASYNC = config_var["TIME_ASYNC"]
-
-# Use the initial positions as set from the file
-USE_INIT_POS = config_var["USE_INIT_POS"]
-
-# Set the simulation time step. Usually set as 0.005
-SIM_TIME_STEP = config_var["SIM_TIME_STEP"]
-
-# whether to use the visualizer or not. If not, by default it will log
-USE_VIS = config_var["USE_VIS"]
-if USE_VIS != 1:
-    logging.basicConfig(filename='sim.log',level=logging.INFO)
-    log_obj = logging.getLogger('sim')
-
-# Desired real_time factor
-real_time_factor = config_var["REAL_TIME_FACTOR"]
-
-# Motor Speed in rpm
-motor_rpm = 180
-motor_full_speed = motor_rpm* 2*np.pi / 60
-
-# Read Initial positions from init.csv
-init_pandas = pd.read_csv("init.csv")
-INIT_POS = init_pandas.to_numpy()
 
 class GracefulKiller:
     """
@@ -190,19 +123,21 @@ def convert_list_to_dict(lst):
     """
     res_dct = {str(i): lst[i] for i in range(0, len(lst))}
     return res_dct
-        
+
+
 def transform_from_map_to_base(pos_x:float, pos_y:float, angle:float):
     """
     Transform from map frame to base
     """
     vec_m = np.array([[pos_x],[pos_y], [1]])
-    T_bm = np.array([[1, 0, -ARENA_LENGTH/2],
-                    [0, 1, -ARENA_WIDTH/2],
+    T_bm = np.array([[1, 0, -(config.arena_length / 2)],
+                    [0, 1, -(config.arena_width / 2)],
                     [0, 0, 1]])
 
-    vec_b = T_bm@vec_m
+    vec_b = T_bm @ vec_m
 
     return vec_b[0][0], vec_b[1][0], angle
+
 
 def msg_decode(msg: bytes) -> list:
     """
@@ -281,14 +216,14 @@ def update_msg_buffer(msg_buffer:list, MSG_BUFFER_SIZE:int, num_of_robot:int,msg
         curr_pos_x = robot_states[i].pos_x
         curr_pos_y = robot_states[i].pos_y
         d = np.sqrt((ref_x - curr_pos_x)**2 + (ref_y - curr_pos_y)**2)
-        if d < RADIUS_OF_VISIBILITY:
-            random_bool = np.random.uniform() < PACKET_SUCCESS_PERC
+        if d < config.comm_range:
+            random_bool = np.random.uniform() < config.packet_pass_rate
             if random_bool:
                 if len(msg) > MSG_BUFFER_SIZE:
                     msg = msg[:MSG_BUFFER_SIZE]
                 msg_buffer[i].append(msg)
-                if len(msg_buffer[i])> NUM_OF_MSGS:
-                    msg_buffer[i] = msg_buffer[i][-NUM_OF_MSGS:]
+                if len(msg_buffer[i])> config.msg_buffer_size:
+                    msg_buffer[i] = msg_buffer[i][-config.msg_buffer_size:]
                 
     # print(type(msg_buffer[2]))
     return msg_buffer
@@ -302,10 +237,10 @@ def initialize_robots():
     vis_socket = None
     fd_to_id_map = {}
     num_of_robot = 0
-    real_time_factor = config_var["REAL_TIME_FACTOR"]
+    real_time_factor = config.real_time_factor
     robot = BotDiffDrive(id_=0)
-    robot_state = [robot]*(NUM_OF_ROBOTS)
-    robot_id = -1*np.ones((NUM_OF_ROBOTS))
+    robot_state = [robot]*(config.num_robots)
+    robot_id = -1*np.ones((config.num_robots))
     id_to_socket_map = {}
     while flag:
         try:
@@ -332,19 +267,18 @@ def initialize_robots():
                             fd_to_id_map[new_socket.fileno()] = num_of_robot
                             # new_socket.sendall(msg1.encode('utf-8'))
                             robot_state[num_of_robot] = BotDiffDrive(id_=num_of_robot)
-                            if USE_INIT_POS == 1:
-                                robot_state[num_of_robot].pos_y = INIT_POS[num_of_robot][2]
-                                robot_state[num_of_robot].pos_x = INIT_POS[num_of_robot][1]
-                                robot_state[num_of_robot].pos_angle = INIT_POS[num_of_robot][3]
+
+                            bot_init_pos = config.get_inital_pos_for_robot()
+                            robot_state[num_of_robot].pos_x = bot_init_pos[0]
+                            robot_state[num_of_robot].pos_y = bot_init_pos[1]
+                            robot_state[num_of_robot].pos_angle = bot_init_pos[2]
+
+                            if config.time_is_synced:
+                                robot_state[num_of_robot].clk = 0
                             else:
-                                robot_state[num_of_robot].pos_y = random.uniform(-(ARENA_LENGTH-0.1)/2, (ARENA_LENGTH-0.1)/2)
-                                robot_state[num_of_robot].pos_x = random.uniform(-(ARENA_WIDTH-0.1)/2, (ARENA_WIDTH-0.1)/2)
-                            robot_state[num_of_robot].usr_led = (50,50,50)
-                            if TIME_ASYNC ==  1:
                                 val_ = random.uniform(0,1)*0.001
                                 robot_state[num_of_robot].clk = val_
-                            else:
-                                robot_state[num_of_robot].clk = 0
+
                             robot_id[num_of_robot] = num_of_robot
                             num_of_robot += 1
                         elif int(msg,2) == 5:
@@ -364,12 +298,12 @@ def initialize_robots():
         except Exception:
             pass
 
-        if USE_VIS == 1:
-            if num_of_robot == NUM_OF_ROBOTS and vis_fd>0:
+        if config.use_visualizer:
+            if num_of_robot == config.num_robots and vis_fd>0:
                 # print("DONE")
                 flag = False
         else:
-            if num_of_robot == NUM_OF_ROBOTS:
+            if num_of_robot == config.num_robots:
                 flag = False
 
     print("While loop done")   
@@ -390,9 +324,9 @@ def initialize_robots():
             x1_ = robot_state[j].pos_x
             y1_ = robot_state[j].pos_y
             d = np.sqrt((x1_-x1)**2 + (y1_ - y1)**2)
-            if d <= 2*RADIUS_OF_ROBOT:
-                x1 = x1_ + (2*RADIUS_OF_ROBOT) + 0.02
-                y1 = y1_ + (2*RADIUS_OF_ROBOT) + 0.02
+            if d <= config.robot_diameter:
+                x1 = x1_ + config.robot_diameter + 0.02
+                y1 = y1_ + config.robot_diameter + 0.02
             
         robot_state[i].pos_x = x1
         robot_state[i].pos_y = y1
@@ -409,7 +343,7 @@ def check_collision(pos, robot_states, i, num_of_robot):
         x1_ = robot_states[j].pos_x
         y1_ = robot_states[j].pos_y
         d = np.sqrt((x1_-pos[1])**2 + (y1_ - pos[2])**2)
-        if d <= 2*RADIUS_OF_ROBOT:
+        if d <= config.robot_diameter:
             collision_flag_ = False
     
     return collision_flag_
@@ -434,11 +368,11 @@ def integrate_world(robot_states:list, num_of_robot:int, wheel_vel_arr:list, cur
             robot_states[i].pos_y = pos[2]
 
         # check for collision with walls
-        robot_states[i].pos_x = max(robot_states[i].pos_x, -ARENA_WIDTH/2 + RADIUS_OF_ROBOT)
-        robot_states[i].pos_x = min(robot_states[i].pos_x, ARENA_WIDTH/2 - RADIUS_OF_ROBOT)
+        robot_states[i].pos_x = max(robot_states[i].pos_x, -config.arena_width/2 + config.robot_radius)
+        robot_states[i].pos_x = min(robot_states[i].pos_x, config.arena_width/2 - config.robot_radius)
         
-        robot_states[i].pos_y = max(robot_states[i].pos_y, -ARENA_LENGTH/2 + RADIUS_OF_ROBOT)
-        robot_states[i].pos_y = min(robot_states[i].pos_y, ARENA_LENGTH/2 - RADIUS_OF_ROBOT)
+        robot_states[i].pos_y = max(robot_states[i].pos_y, -config.arena_height/2 + config.robot_radius)
+        robot_states[i].pos_y = min(robot_states[i].pos_y, config.arena_height/2 - config.robot_radius)
 
         robot_states[i].clk = max(robot_states[i].clk, sim_time)
 
@@ -536,7 +470,7 @@ def get_data(current_socket, msg, robot_state, robot_id, num_of_robot, MSG_BUFFE
         wheel_pow = np.array([vel[0],vel[1]])
         # print("Wheel power:", wheel_pow)
         # print("motor_full_speed", motor_full_speed)
-        wheel_vel = motor_full_speed*wheel_pow/100
+        wheel_vel = config.max_motor_speed * wheel_pow / 100
         wheel_vel_arr[int(msg[1])] = wheel_vel
         # print("Wheel velocity:",wheel_vel)
     elif msg[2] == 8:
@@ -569,24 +503,20 @@ def loop():
     """
     sim_time_start = time.time()
     notslept = 0
-    real_time_factor = config_var["REAL_TIME_FACTOR"]
+    real_time_factor = config.real_time_factor
     
-    T_sim = SIM_TIME_STEP
+    T_sim = config.sim_time_step
     # T_sim = real_time_factor*T_real
     T_real = T_sim/real_time_factor
-    # sim_ticks = 0 
-    # sim_time_or = time.time()
     sim_time_curr = 0.0001
-    # robot = BotSim(id=0,usr_led=(0,0,0),clk=sim_time_curr)
-    # robot_state = [robot]*NUM_OF_ROBOTS
     buffer_list_size = 16
     delta_vis = 0
     real_time_curr = 0
     sim_time_delt = 0.0
-    msg_buffer = [[]]*(NUM_OF_ROBOTS)
+    msg_buffer = [[]] * config.num_robots
     MSG_BUFFER_SIZE = 1792
-    num_of_robot = NUM_OF_ROBOTS
-    wheel_vel_arr  = [np.array([0,0])]*(NUM_OF_ROBOTS)
+    num_of_robot = config.num_robots
+    wheel_vel_arr  = [np.array([0,0])]*(config.num_robots)
     vis_fd, vis_socket, fd_to_id_map, robot_state, robot_id = initialize_robots()
     real_time_now_start = time.time()
 
@@ -594,9 +524,6 @@ def loop():
 
     killer = GracefulKiller()
     while not killer.kill_now:
-        
-        
-       
         _time_socket_start = time.time()
         rlist, wlist, xlist = select.select([server_socket] + open_client_sockets, open_client_sockets, []) # apending reading n writing socket to list
         for current_socket in rlist: # sockets that can be read
@@ -620,7 +547,7 @@ def loop():
         
         # Only allows visualization every 0.05 seconds
         delta_vis += T_real
-        if USE_VIS == 1:
+        if config.use_visualizer == 1:
 
             if delta_vis > 0.05: 
                 delta_vis = 0
@@ -631,17 +558,13 @@ def loop():
             log_data(robot_state, num_of_robot, sim_time_curr, real_time_curr, actual_rtf)
             
         
-        # delta_time = T_sim
         _time_integrate_start = time.time()
         sim_time_curr += T_sim
         robot_state = integrate_world(robot_state, num_of_robot, wheel_vel_arr, curr_time = time.time(), prev_time = real_time_now_start, dt = T_sim, sim_time= sim_time_curr)
         
-        # robot_state = update_time(robot_state,num_of_robot,sim_time_curr)
         real_time_now_end = time.time()
         elapsed_time_diff = real_time_now_end - real_time_now_start
         _time_integrate_delta = time.time() - _time_integrate_start
-        # print("Time to integrate:",_time_integrate_delta)
-        # print("Time for sockets", _time_socket_delta)
         real_time_now_start = time.time()
 
         if elapsed_time_diff < T_real:
@@ -657,13 +580,11 @@ def loop():
             elapsedDIffList.append(elapsed_time_diff)
             
             notslept += 1
-            # print(notslept)
-        
     server_socket.close()
 
-def main():
-
+def main() -> int:
     # functiontrace.trace()
+
     try:
        loop()
     except KeyboardInterrupt:
@@ -671,11 +592,9 @@ def main():
         server_socket.close()
     except BaseException:
         print("BaseException")
-        # server_socket.close()
-    
 
-    sys.exit(0)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
