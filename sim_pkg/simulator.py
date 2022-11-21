@@ -12,12 +12,17 @@ import numpy as np
 from itertools import chain
 import signal
 import functiontrace
+import os
 import logging
+import argparse
 
 from sim_pkg.config import Configuration
 
-
-config = Configuration.from_path('config.json')
+# TODO: Remove this hack, should be scoped in a function
+parser = argparse.ArgumentParser()
+parser.add_argument('-c', '--config', type=str, required=True)
+args = parser.parse_args()
+config = Configuration.from_path(os.path.abspath(args.config))
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.bind((socket.gethostname(), config.server_port))

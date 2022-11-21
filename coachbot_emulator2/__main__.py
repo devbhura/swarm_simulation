@@ -1,5 +1,5 @@
 #!/usr/bin/env python2
-from robot_class import Coachbot
+from coachbot_emulator2.coachbot import Coachbot
 import signal
 import sys
 import argparse

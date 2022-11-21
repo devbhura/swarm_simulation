@@ -3,47 +3,46 @@
 import subprocess
 import time
 from pathlib import Path
-import json
 import sys
-import socketserver
-import csv
-import numpy as np
+import os
 import argparse
+from typing import List, Optional, Tuple
 from sim_pkg.config import Configuration
 
-robot_processes_ = []
-parser = argparse.ArgumentParser(description='Run the simulator')
+def run() -> Tuple[subprocess.Popen, List[subprocess.Popen],
+                   Optional[subprocess.Popen]]:
+    """Opens all the programs involved."""
 
-parser.add_argument('-fn', '--filename', type=str,
-                    help="Name of the file without the .py extension")
-
-args = parser.parse_args()
-
-def run():
-    """
-    Opens all the programs involved
-    """
-
-    # Read required parameters from config.json
-    config = Configuration.from_path('config.json')  # Shouldn't be hardcoded.
-    path = str(Path(__file__).parent)
+    parser = argparse.ArgumentParser(description='Run the simulator')
+    parser.add_argument('-fn', '--filename', type=str,
+                        help="Name of the file without the .py extension")
+    parser.add_argument('-c', '--config', type=str, default='config.json',
+                        help='Path to configuration file.')
+    args = parser.parse_args()
+    config = Configuration.from_path(os.path.abspath(args.config))
     
-    # Open the simulator in a process
-    sim_process_ = subprocess.Popen(['python3','-O', 'simulator.py'],close_fds=True,cwd=path)
-    time.sleep(1)
+    # Start simulator
+    sim_process = subprocess.Popen(
+        ['python3', '-O', '-m', 'sim_pkg.simulator', '-c', args.config],
+        close_fds=True
+    )
+    time.sleep(1)  # TODO: Remove, waiting for what you need to wait for.
 
-    # Open all the robots
-    for i in range(config.num_robots):
-        r_process = subprocess.Popen(['python2','-O', 'bootloader.py', '-fn', args.filename],close_fds=True,cwd=path)
-        robot_processes_.append(r_process)
-    # subprocess.Popen(['python2','user2.py'],close_fds=True,cwd=path)
-    
-    if config.use_visualizer:
-        vis_processes_ = subprocess.Popen(['python3','-O','visualization.py'],close_fds=True,cwd=path)
-    else:
-        vis_processes_ = -1 
+    # Start robot processes.
+    robot_processes = [
+        subprocess.Popen(['python2', '-O', '-m', 'coachbot_emulator2', '-fn',
+                          args.filename], close_fds=True)
+        for _ in range(config.num_robots)
+    ]
 
-    return sim_process_, robot_processes_, vis_processes_
+    vis_process = (
+        subprocess.Popen(['python', '-O', 'visualization.py'],
+                         close_fds=True)
+        if config.use_visualizer
+        else None
+    )
+
+    return sim_process, robot_processes, vis_process
 
 def main():
     """
@@ -56,7 +55,8 @@ def main():
         sim_process.wait()
         for process in robot_processes:
             process.wait()
-        vis_process.wait()
+        if vis_process is not None:
+            vis_process.wait()
 
     except KeyboardInterrupt:
         # Kill the processes. Currently kills the robot subprocess and
@@ -66,7 +66,7 @@ def main():
             stdout, stderr = process.communicate()
 
         subprocess.Popen.terminate(sim_process)
-        if vis_process != -1:
+        if vis_process is not None:
             try:
                 subprocess.Popen.terminate(vis_process)
             except:
