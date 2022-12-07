@@ -8,6 +8,7 @@ from typing import Tuple, Optional
 from time import time
 
 import numpy as np
+<<<<<<< HEAD:sim_pkg/control.py
 
 # TODO: Incorrect import
 try:
@@ -16,6 +17,9 @@ try:
 except (ImportError, ValueError):
     from math_utils import angle_between, clamp_angle, distance
     # import motor
+=======
+from coachbot_emulator2.math_utils import angle_between, clamp_angle, distance
+>>>>>>> origin/user/markovejnovic/13-performance-fix:coachbot_emulator2/control.py
 
 
 class PIDController:

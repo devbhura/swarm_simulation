@@ -9,8 +9,8 @@ import json
 import logging
 logging.basicConfig(filename='bot.log',level=logging.INFO)
 import numpy as np
-import math_utils
-from control import MotorController, PIDController
+from coachbot_emulator2 import math_utils
+from coachbot_emulator2.control import MotorController, PIDController
 import csv
 import time
 
@@ -392,7 +392,7 @@ class Coachbot:
 
 
     def get_pose(self):
-        #  type: () -> tuple[float, float, float] | None
+        #  type: () -> tuple[float, float, float]
         """
         This function retrieves the pose of the robot, if it can. If it can't
         it returns None.
