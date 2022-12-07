@@ -516,13 +516,7 @@ def loop():
     T_sim = config.sim_time_step
     # T_sim = real_time_factor*T_real
     T_real = T_sim/real_time_factor
-<<<<<<< HEAD
-    
     sim_time_curr = 0.0001
-    
-=======
-    sim_time_curr = 0.0001
->>>>>>> origin/user/markovejnovic/13-performance-fix
     buffer_list_size = 16
     delta_vis = 0
     real_time_curr = 0
@@ -563,7 +557,7 @@ def loop():
         
         # Only allows visualization every 0.05 seconds
         delta_vis += T_real
-        if config.use_visualizer == 1:
+        if config.use_visualizer:
 
             if delta_vis > 0.05: 
                 delta_vis = 0
@@ -596,23 +590,13 @@ def loop():
             real_time_curr += elapsed_time_diff
             actual_rtf = T_sim/elapsed_time_diff
             elapsedDIffList.append(elapsed_time_diff)
-            
             notslept += 1
-<<<<<<< HEAD
-            # print(notslept)
         actual_rtf_list.append(actual_rtf)
-    server_socket.close()
-
-def main():
-
-    functiontrace.trace()
-=======
     server_socket.close()
 
 def main() -> int:
     # functiontrace.trace()
 
->>>>>>> origin/user/markovejnovic/13-performance-fix
     try:
        loop()
     except KeyboardInterrupt:
