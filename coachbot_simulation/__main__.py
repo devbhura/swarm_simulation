@@ -7,7 +7,7 @@ import sys
 import os
 import argparse
 from typing import List, Optional, Tuple
-from sim_pkg.config import Configuration
+from coachbot_simulation.config import Configuration
 
 def run() -> Tuple[subprocess.Popen, List[subprocess.Popen],
                    Optional[subprocess.Popen]]:
@@ -23,7 +23,7 @@ def run() -> Tuple[subprocess.Popen, List[subprocess.Popen],
     
     # Start simulator
     sim_process = subprocess.Popen(
-        ['python3', '-O', '-m', 'sim_pkg.simulator', '-c', args.config],
+        ['python3', '-O', '-m', 'coachbot_simulator.simulator', '-c', args.config],
         close_fds=True
     )
     time.sleep(1)  # TODO: Remove, waiting for what you need to wait for.

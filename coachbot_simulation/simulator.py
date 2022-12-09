@@ -16,7 +16,7 @@ import os
 import logging
 import argparse
 
-from sim_pkg.config import Configuration
+from coachbot_simulation.config import Configuration
 
 # TODO: Remove this hack, should be scoped in a function
 parser = argparse.ArgumentParser()
